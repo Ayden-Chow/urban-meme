@@ -1,0 +1,322 @@
+0000              1   ; LCD_test_4bit.asm: Initializes and uses an LCD in 4-bit mode
+0000              2   ; using the most common procedure found on the internet.
+                  4   $LIST
+0000              6   
+0000              7   org 0000H
+0000 02009C       8       ljmp myprogram
+0003              9   
+0003             10   ; These 'equ' must match the hardware wiring
+0003             11   LCD_RS equ P1.1
+0003             12   LCD_RW equ P1.2 ; Not used in this code
+0003             13   LCD_E  equ P1.3
+0003             14   LCD_D4 equ P3.2
+0003             15   LCD_D5 equ P3.3
+0003             16   LCD_D6 equ P3.4
+0003             17   LCD_D7 equ P3.5
+0003             18   
+0003             19   ; When using a 22.1184MHz crystal in fast mode
+0003             20   ; one cycle takes 1.0/22.1184MHz = 45.21123 ns
+0003             21   
+0003             22   ;---------------------------------;
+0003             23   ; Wait 40 microseconds            ;
+0003             24   ;---------------------------------;
+0003             25   Wait40uSec:
+0003 C000        26       push AR0
+0005 78B1        27       mov R0, #177
+0007             28   L0:
+0007 00          29       nop
+0008 00          30       nop
+0009 D8FC        31       djnz R0, L0 ; 1+1+3 cycles->5*45.21123ns*177=40us
+000B D000        32       pop AR0
+000D 22          33       ret
+000E             34   
+000E             35   ;---------------------------------;
+000E             36   ; Wait 'R2' milliseconds          ;
+000E             37   ;---------------------------------;
+000E             38   WaitmilliSec:
+000E C000        39       push AR0
+0010 C001        40       push AR1
+0012 792D        41   L3: mov R1, #45
+0014 78A6        42   L2: mov R0, #166
+0016 D8FE        43   L1: djnz R0, L1 ; 3 cycles->3*45.21123ns*166=22.51519us
+0018 D9FA        44       djnz R1, L2 ; 22.51519us*45=1.013ms
+001A DAF6        45       djnz R2, L3 ; number of millisecons to wait passed in R2
+001C D001        46       pop AR1
+001E D000        47       pop AR0
+0020 22          48       ret
+0021             49       
+0021             50   ;---------------------------------;
+0021             51   ; Wait 0.5 seconds                  ;
+0021             52   ;---------------------------------;
+0021             53   WaitHalfSec:
+0021 7A59        54            mov R2, #89
+0023 79FA        55   Z3: mov R1, #250
+0025 78A6        56   Z2: mov R0, #166
+0027 D8FE        57   Z1: djnz R0, Z1
+0029 D9FA        58            djnz R1, Z2
+002B DAF6        59            djnz R2, Z3
+002D 22          60            ret
+002E             61   
+002E             62   WaitlessSec:
+002E 7A1D        63            mov R2, #89/3
+0030 79FA        64   a3: mov R1, #250
+0032 78A6        65   a2: mov R0, #166
+0034 D8FE        66   a1: djnz R0, a1
+0036 D9FA        67            djnz R1, a2
+0038 DAF6        68            djnz R2, a3
+003A 22          69            ret
+003B             70   ;---------------------------------;
+003B             71   ; Toggles the LCD's 'E' pin       ;
+003B             72   ;---------------------------------;
+003B             73   LCD_pulse:
+003B D293        74       setb LCD_E
+003D 120003      75       lcall Wait40uSec
+0040 C293        76       clr LCD_E
+0042 22          77       ret
+0043             78   
+0043             79   ;---------------------------------;
+0043             80   ; Writes data to LCD              ;
+0043             81   ;---------------------------------;
+0043             82   WriteData:
+0043 D291        83       setb LCD_RS
+0045 02004D      84       ljmp LCD_byte
+0048             85   
+0048             86   ;---------------------------------;
+0048             87   ; Writes command to LCD           ;
+0048             88   ;---------------------------------;
+0048             89   WriteCommand:
+0048 C291        90       clr LCD_RS
+004A 02004D      91       ljmp LCD_byte
+004D             92   
+004D             93   ;---------------------------------;
+004D             94   ; Writes acc to LCD in 4-bit mode ;
+004D             95   ;---------------------------------;
+004D             96   LCD_byte:
+004D             97       ; Write high 4 bits first
+004D A2E7        98       mov c, ACC.7
+004F 92B5        99       mov LCD_D7, c
+0051 A2E6       100       mov c, ACC.6
+0053 92B4       101       mov LCD_D6, c
+0055 A2E5       102       mov c, ACC.5
+0057 92B3       103       mov LCD_D5, c
+0059 A2E4       104       mov c, ACC.4
+005B 92B2       105       mov LCD_D4, c
+005D 12003B     106       lcall LCD_pulse
+0060            107   
+0060            108       ; Write low 4 bits next
+0060 A2E3       109       mov c, ACC.3
+0062 92B5       110       mov LCD_D7, c
+0064 A2E2       111       mov c, ACC.2
+0066 92B4       112       mov LCD_D6, c
+0068 A2E1       113       mov c, ACC.1
+006A 92B3       114       mov LCD_D5, c
+006C A2E0       115       mov c, ACC.0
+006E 92B2       116       mov LCD_D4, c
+0070 12003B     117       lcall LCD_pulse
+0073 22         118       ret
+0074            119   
+0074            120   ;---------------------------------;
+0074            121   ; Configure LCD in 4-bit mode     ;
+0074            122   ;---------------------------------;
+0074            123   LCD_4BIT:
+0074 C293       124       clr LCD_E   ; Resting state of LCD's enable is zero
+0076 C292       125       clr LCD_RW  ; We are only writing to the LCD in this program
+0078            126   
+0078            127       ; After power on, wait for the LCD start up time before initializing
+0078            128       ; NOTE: the preprogrammed power-on delay of 16 ms on the AT89LP51RC2
+0078            129       ; seems to be enough.  That is why these two lines are commented out.
+0078            130       ; Also, commenting these two lines improves simulation time in Multisim.
+0078            131       ; mov R2, #40
+0078            132       ; lcall WaitmilliSec
+0078            133   
+0078            134       ; First make sure the LCD is in 8-bit mode and then change to 4-bit mode
+0078 7433       135       mov a, #0x33
+007A 120048     136       lcall WriteCommand
+007D 7433       137       mov a, #0x33
+007F 120048     138       lcall WriteCommand
+0082 7432       139       mov a, #0x32 ; change to 4-bit mode
+0084 120048     140       lcall WriteCommand
+0087            141   
+0087            142       ; Configure the LCD
+0087 7428       143       mov a, #0x28
+0089 120048     144       lcall WriteCommand
+008C 740C       145       mov a, #0x0c
+008E 120048     146       lcall WriteCommand
+0091 7401       147       mov a, #0x01 ;  Clear screen command (takes some time)
+0093 120048     148       lcall WriteCommand
+0096            149   
+0096            150       ;Wait for clear screen command to finish. Usually takes 1.52ms.
+0096 7A02       151       mov R2, #2
+0098 12000E     152       lcall WaitmilliSec
+009B 22         153       ret
+009C            154   
+009C            155   ;---------------------------------;
+009C            156   ; Main loop.  Initialize stack,   ;
+009C            157   ; ports, LCD, and displays        ;
+009C            158   ; letters on the LCD              ;
+009C            159   ;---------------------------------;
+009C            160   myprogram:
+009C 75817F     161       mov SP, #7FH
+009F 120074     162       lcall LCD_4BIT
+00A2            163   WriteName:
+00A2 12002E     164            lcall WaitlessSec
+00A5 7480       165       mov a, #0x80 ; Move cursor to line 1 column 1
+00A7 120048     166       lcall WriteCommand
+00AA 7441       167       mov a, #'A'
+00AC 120043     168       lcall WriteData
+00AF 12002E     169       lcall WaitlessSec
+00B2 7481       170       mov a, #0x81 ; Move cursor to line 1 column 2
+00B4 120048     171       lcall WriteCommand
+00B7 7459       172       mov a, #'Y'
+00B9 120043     173       lcall WriteData
+00BC 12002E     174       lcall WaitlessSec
+00BF 7482       175       mov a, #0x82 ; Move cursor to line 1 column 3
+00C1 120048     176       lcall WriteCommand
+00C4 7444       177       mov a, #'D'
+00C6 120043     178       lcall WriteData
+00C9 12002E     179       lcall WaitlessSec
+00CC 7483       180       mov a, #0x83 ; Move cursor to line 1 column 4
+00CE 120048     181       lcall WriteCommand
+00D1 7445       182       mov a, #'E'
+00D3 120043     183       lcall WriteData
+00D6 12002E     184       lcall WaitlessSec
+00D9 7484       185       mov a, #0x84 ; Move cursor to line 1 column 5
+00DB 120048     186       lcall WriteCommand
+00DE 744E       187       mov a, #'N'
+00E0 120043     188       lcall WriteData
+00E3 12002E     189       lcall WaitlessSec
+00E6 7486       190       mov a, #0x86 ; Move cursor to line 1 column 7
+00E8 120048     191       lcall WriteCommand
+00EB 7443       192       mov a, #'C'
+00ED 120043     193       lcall WriteData
+00F0 12002E     194       lcall WaitlessSec
+00F3 7487       195       mov a, #0x87 ; Move cursor to line 1 column 7
+00F5 120048     196       lcall WriteCommand
+00F8 7448       197       mov a, #'H'
+00FA 120043     198       lcall WriteData
+00FD 12002E     199       lcall WaitlessSec
+0100 7488       200       mov a, #0x88 ; Move cursor to line 1 column 7
+0102 120048     201       lcall WriteCommand
+0105 744F       202       mov a, #'O'
+0107 120043     203       lcall WriteData
+010A 12002E     204       lcall WaitlessSec
+010D 7489       205       mov a, #0x89 ; Move cursor to line 1 column 7
+010F 120048     206       lcall WriteCommand
+0112 7457       207       mov a, #'W'
+0114 120043     208       lcall WriteData
+0117            209   
+0117            210   WriteNum:
+0117 12002E     211            lcall WaitlessSec
+011A 74C0       212       mov a, #0xC0 ; Move cursor to line 2 column 3
+011C 120048     213       lcall WriteCommand
+011F 7433       214       mov a, #'3'
+0121 120043     215       lcall WriteData
+0124 12002E     216       lcall WaitlessSec
+0127 74C1       217       mov a, #0xC1 ; Move cursor to line 2 column 3
+0129 120048     218       lcall WriteCommand
+012C 7433       219       mov a, #'3'
+012E 120043     220       lcall WriteData
+0131 12002E     221       lcall WaitlessSec
+0134 74C2       222       mov a, #0xC2 ; Move cursor to line 2 column 3
+0136 120048     223       lcall WriteCommand
+0139 7431       224       mov a, #'1'
+013B 120043     225       lcall WriteData
+013E 12002E     226       lcall WaitlessSec
+0141 74C3       227       mov a, #0xC3 ; Move cursor to line 2 column 3
+0143 120048     228       lcall WriteCommand
+0146 7437       229       mov a, #'7'
+0148 120043     230       lcall WriteData
+014B 12002E     231       lcall WaitlessSec
+014E 74C4       232       mov a, #0xC4 ; Move cursor to line 2 column 3
+0150 120048     233       lcall WriteCommand
+0153 7437       234       mov a, #'7'
+0155 120043     235       lcall WriteData
+0158 12002E     236       lcall WaitlessSec
+015B 74C5       237       mov a, #0xC5 ; Move cursor to line 2 column 3
+015D 120048     238       lcall WriteCommand
+0160 7430       239       mov a, #'0'
+0162 120043     240       lcall WriteData
+0165 12002E     241       lcall WaitlessSec
+0168 74C6       242       mov a, #0xC6 ; Move cursor to line 2 column 3
+016A 120048     243       lcall WriteCommand
+016D 7439       244       mov a, #'9'
+016F 120043     245       lcall WriteData
+0172 12002E     246       lcall WaitlessSec
+0175 74C7       247       mov a, #0xC7 ; Move cursor to line 2 column 3
+0177 120048     248       lcall WriteCommand
+017A 7438       249       mov a, #'8'
+017C 120043     250       lcall WriteData
+017F 120021     251       lcall WaitHalfSec
+0182            252   WriteClear:
+0182 7480       253            mov a, #0x80 ; Move cursor to line 1 column 1
+0184 120048     254       lcall WriteCommand
+0187 7420       255       mov a, #' '
+0189 120043     256       lcall WriteData
+018C 7481       257       mov a, #0x81 ; Move cursor to line 1 column 2
+018E 120048     258       lcall WriteCommand
+0191 7420       259       mov a, #' '
+0193 120043     260       lcall WriteData
+0196 7482       261       mov a, #0x82 ; Move cursor to line 1 column 3
+0198 120048     262       lcall WriteCommand
+019B 7420       263       mov a, #' '
+019D 120043     264       lcall WriteData
+01A0 7483       265       mov a, #0x83 ; Move cursor to line 1 column 4
+01A2 120048     266       lcall WriteCommand
+01A5 7420       267       mov a, #' '
+01A7 120043     268       lcall WriteData
+01AA 7484       269       mov a, #0x84 ; Move cursor to line 1 column 5
+01AC 120048     270       lcall WriteCommand
+01AF 7420       271       mov a, #' '
+01B1 120043     272       lcall WriteData
+01B4 7486       273       mov a, #0x86 ; Move cursor to line 1 column 7
+01B6 120048     274       lcall WriteCommand
+01B9 7420       275       mov a, #' '
+01BB 120043     276       lcall WriteData
+01BE 7487       277       mov a, #0x87 ; Move cursor to line 1 column 7
+01C0 120048     278       lcall WriteCommand
+01C3 7420       279       mov a, #' '
+01C5 120043     280       lcall WriteData
+01C8 7488       281       mov a, #0x88 ; Move cursor to line 1 column 7
+01CA 120048     282       lcall WriteCommand
+01CD 7420       283       mov a, #' '
+01CF 120043     284       lcall WriteData
+01D2 7489       285       mov a, #0x89 ; Move cursor to line 1 column 7
+01D4 120048     286       lcall WriteCommand
+01D7 7420       287       mov a, #' '
+01D9 120043     288       lcall WriteData
+01DC 74C0       289       mov a, #0xC0 ; Move cursor to line 2 column 3
+01DE 120048     290       lcall WriteCommand
+01E1 7420       291       mov a, #' '
+01E3 120043     292       lcall WriteData
+01E6 74C1       293       mov a, #0xC1 ; Move cursor to line 2 column 3
+01E8 120048     294       lcall WriteCommand
+01EB 7420       295       mov a, #' '
+01ED 120043     296       lcall WriteData
+01F0 74C2       297       mov a, #0xC2 ; Move cursor to line 2 column 3
+01F2 120048     298       lcall WriteCommand
+01F5 7420       299       mov a, #' '
+01F7 120043     300       lcall WriteData
+01FA 74C3       301       mov a, #0xC3 ; Move cursor to line 2 column 3
+01FC 120048     302       lcall WriteCommand
+01FF 7420       303       mov a, #' '
+0201 120043     304       lcall WriteData
+0204 74C4       305       mov a, #0xC4 ; Move cursor to line 2 column 3
+0206 120048     306       lcall WriteCommand
+0209 7420       307       mov a, #' '
+020B 120043     308       lcall WriteData
+020E 74C5       309       mov a, #0xC5 ; Move cursor to line 2 column 3
+0210 120048     310       lcall WriteCommand
+0213 7420       311       mov a, #' '
+0215 120043     312       lcall WriteData
+0218 74C6       313       mov a, #0xC6 ; Move cursor to line 2 column 3
+021A 120048     314       lcall WriteCommand
+021D 7420       315       mov a, #' '
+021F 120043     316       lcall WriteData
+0222 74C7       317       mov a, #0xC7 ; Move cursor to line 2 column 3
+0224 120048     318       lcall WriteCommand
+0227 7420       319       mov a, #' '
+0229 B2B7       320       cpl P3.7
+022B 120043     321       lcall WriteData
+022E 120021     322       lcall WaitHalfSec
+0231 0200A2     323       ljmp WriteName
+0234            324   END
